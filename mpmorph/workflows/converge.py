@@ -11,7 +11,7 @@ __maintainer__ = 'Eric Sivonxay'
 __email__ = 'esivonxay@lbl.gov'
 
 
-def get_converge_wf(structure, temperature, converge_scheme='EOS', priority=None,
+def get_converge_wf(structure, temperature1, temperature2, converge_scheme='EOS', priority=None,
                     max_steps=5000, target_steps=10000, preconverged=False,
                     notes=None, save_data="all", aggregate_trajectory=True, **kwargs):
     """
@@ -37,7 +37,7 @@ def get_converge_wf(structure, temperature, converge_scheme='EOS', priority=None
     # Generate a unique identifier for the fireworks belonging to this workflows
     tag_id = kwargs.get('tag_id', uuid.uuid4())
     prod_count = kwargs.get('prod_count', 0)
-    wf_name = kwargs.get('wf_name', f'{structure.composition.reduced_formula}_{temperature}_diffusion')
+    wf_name = kwargs.get('wf_name', f'{structure.composition.reduced_formula}_{temperature2}_diffusion')
 
     # To aggregate trajectory, the job output from the production runs must be saved.
     if aggregate_trajectory and save_data is None:
@@ -46,7 +46,7 @@ def get_converge_wf(structure, temperature, converge_scheme='EOS', priority=None
     fw_list = []
 
     # Setup initial Run and convergence of structure
-    run_args = {"md_params": {"start_temp": temperature, "end_temp": temperature, "nsteps": 2000},
+    run_args = {"md_params": {"start_temp": temperature1, "end_temp": temperature2, "nsteps": 2000},
                 "run_specs": {"vasp_input_set": None, "vasp_cmd": ">>vasp_cmd<<", "db_file": ">>db_file<<"},
                 "optional_fw_params": {
                     "override_default_vasp_params": {'user_incar_settings': {'ISIF': 1, 'LWAVE': False,
@@ -67,7 +67,7 @@ def get_converge_wf(structure, temperature, converge_scheme='EOS', priority=None
         "optional_fw_params": run_args["optional_fw_params"],
         "tag_id": tag_id
     }
-    _spawner_args["md_params"].update({"start_temp": run_args["md_params"]["end_temp"]})
+    _spawner_args["md_params"].update({"start_temp": run_args["md_params"]["start_temp"]})
     _spawner_args = recursive_update(_spawner_args, kwargs.get('spawner_args', {}))
 
     # Converge the pressure (volume) of the system
@@ -119,7 +119,7 @@ def get_converge_wf(structure, temperature, converge_scheme='EOS', priority=None
     prod_steps = 0
     while prod_steps <= target_steps - max_steps:
         # Create Dictionary with production run parameters
-        run_args = {"md_params": {"start_temp": run_args["md_params"]["end_temp"],
+        run_args = {"md_params": {"start_temp": run_args["md_params"]["start_temp"],
                                   "end_temp": run_args["md_params"]["end_temp"],
                                   "nsteps": max_steps},
                     "run_specs": {"vasp_input_set": None, "vasp_cmd": ">>vasp_cmd<<", "db_file": ">>db_file<<"},
@@ -131,7 +131,7 @@ def get_converge_wf(structure, temperature, converge_scheme='EOS', priority=None
 
         parents = fw_list[-1] if len(fw_list) > 0 else []
         previous_structure = False if preconverged and prod_steps == 0 else True
-        fw = MDFW(structure=structure, name=f'{temperature}_prod_run_{prod_count}-{tag_id}',
+        fw = MDFW(structure=structure, name=f'{temperature2}_prod_run_{prod_count}-{tag_id}',
                   previous_structure=previous_structure, insert_db=insert_prod_data, **run_args["md_params"],
                   **run_args["run_specs"], **run_args["optional_fw_params"], parents=parents)
         fw_list.append(fw)
